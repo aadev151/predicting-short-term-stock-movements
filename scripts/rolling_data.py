@@ -1,6 +1,12 @@
 import numpy as np
 import pandas as pd
-import yfinance as yf
+from pathlib import Path
+import argparse
+
+try:
+    import yfinance as yf
+except ModuleNotFoundError:  # Allow local CSV workflows without yfinance installed.
+    yf = None
 
 
 def _rsi(close: pd.Series, period: int) -> pd.Series:
@@ -16,6 +22,8 @@ def _ema(s: pd.Series, span: int) -> pd.Series:
 
 
 def download_yahoo(symbols: str | list[str], start: str = "2015-01-01", end: str | None = None) -> pd.DataFrame:
+    if yf is None:
+        raise ModuleNotFoundError("yfinance is required for download_yahoo but is not installed.")
 
     tickers = [symbols] if isinstance(symbols, str) else list(symbols)
 
@@ -99,12 +107,12 @@ def make_rolling_features(df: pd.DataFrame, market: pd.DataFrame | None = None) 
         out = pd.DataFrame(index=df.index)
 
         
-        out["ret_1"] = adj.pct_change()
+        out["ret_1"] = adj.pct_change(fill_method=None)
         out["logret_1"] = np.log(adj).diff()
         out["hl_range"] = (h - l) / (c.replace(0, np.nan))
         out["oc_gap"] = (o - c.shift(1)) / (c.shift(1).replace(0, np.nan))
         out["co_move"] = (c - o) / (o.replace(0, np.nan))
-        out["vol_chg"] = v.pct_change()
+        out["vol_chg"] = v.pct_change(fill_method=None)
         out["dollar_vol"] = c * v
 
         
@@ -115,7 +123,7 @@ def make_rolling_features(df: pd.DataFrame, market: pd.DataFrame | None = None) 
 
         
         for w in win_returns:
-            out[f"ret_{w}"] = adj.pct_change(w)
+            out[f"ret_{w}"] = adj.pct_change(w, fill_method=None)
             out[f"logret_{w}"] = np.log(adj).diff(w)
             out[f"mom_{w}"] = adj / adj.shift(w) - 1
 
@@ -252,44 +260,133 @@ def make_windows(
     return X, y, feature_names, meta
 
 
+def make_rolling_features_from_long(df: pd.DataFrame) -> pd.DataFrame:
+    required_cols = {"date", "ticker", "open", "high", "low", "close", "adj_close", "volume"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    work = df.copy()
+    work["date"] = pd.to_datetime(work["date"])
+    work = work.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+    results = []
+    for ticker, g in work.groupby("ticker", sort=False):
+        g = g.sort_values("date").copy()
+
+        o = pd.to_numeric(g["open"], errors="coerce")
+        h = pd.to_numeric(g["high"], errors="coerce")
+        l = pd.to_numeric(g["low"], errors="coerce")
+        c = pd.to_numeric(g["close"], errors="coerce")
+        adj = pd.to_numeric(g["adj_close"], errors="coerce")
+        v = pd.to_numeric(g["volume"], errors="coerce")
+
+        out = pd.DataFrame({"date": g["date"].values, "ticker": ticker})
+        out["ret_1"] = adj.pct_change(fill_method=None)
+        out["logret_1"] = np.log(adj).diff()
+        out["hl_range"] = (h - l) / c.replace(0, np.nan)
+        out["oc_gap"] = (o - c.shift(1)) / c.shift(1).replace(0, np.nan)
+        out["co_move"] = (c - o) / o.replace(0, np.nan)
+        out["vol_chg"] = v.pct_change(fill_method=None)
+        out["dollar_vol"] = c * v
+
+        for w in [2, 3, 5, 10, 14, 20, 30, 60]:
+            out[f"ret_{w}"] = adj.pct_change(w, fill_method=None)
+            out[f"logret_{w}"] = np.log(adj).diff(w)
+            out[f"mom_{w}"] = adj / adj.shift(w) - 1
+
+        for w in [5, 10, 20, 30, 60]:
+            out[f"rv_logret_{w}"] = out["logret_1"].rolling(w).std() * np.sqrt(252)
+            out[f"vol_ret_{w}"] = out["ret_1"].rolling(w).std()
+            out[f"mean_ret_{w}"] = out["ret_1"].rolling(w).mean()
+
+        prev_close = c.shift(1)
+        tr = pd.concat([(h - l), (h - prev_close).abs(), (l - prev_close).abs()], axis=1).max(axis=1)
+        out["true_range"] = tr
+        for w in [5, 10, 14, 20, 60]:
+            out[f"atr_{w}"] = tr.rolling(w).mean()
+            out[f"range_mean_{w}"] = out["hl_range"].rolling(w).mean()
+            out[f"range_std_{w}"] = out["hl_range"].rolling(w).std()
+
+        for w in [5, 10, 20, 60]:
+            out[f"vol_sma_{w}"] = v.rolling(w).mean()
+            out[f"vol_ema_{w}"] = v.ewm(span=w, adjust=False).mean()
+            out[f"vol_z_{w}"] = (v - v.rolling(w).mean()) / v.rolling(w).std().replace(0, np.nan)
+            dvol_roll = out["dollar_vol"].rolling(w)
+            out[f"dvol_z_{w}"] = (out["dollar_vol"] - dvol_roll.mean()) / dvol_roll.std().replace(0, np.nan)
+
+        for w in [10, 20, 60]:
+            out[f"price_z_{w}"] = (adj - adj.rolling(w).mean()) / adj.rolling(w).std().replace(0, np.nan)
+            ret_roll = out["ret_1"].rolling(w)
+            out[f"ret_z_{w}"] = (out["ret_1"] - ret_roll.mean()) / ret_roll.std().replace(0, np.nan)
+
+        for p in [7, 14, 21]:
+            out[f"rsi_{p}"] = _rsi(adj, p)
+
+        ema12 = _ema(adj, 12)
+        ema26 = _ema(adj, 26)
+        macd = ema12 - ema26
+        signal = _ema(macd, 9)
+        out["macd"] = macd
+        out["macd_signal"] = signal
+        out["macd_hist"] = macd - signal
+
+        mid = adj.rolling(20).mean()
+        sd = adj.rolling(20).std()
+        bb_up = mid + 2 * sd
+        bb_dn = mid - 2 * sd
+        out["bb_mid_20"] = mid
+        out["bb_up_20"] = bb_up
+        out["bb_dn_20"] = bb_dn
+        out["bb_width_20"] = (bb_up - bb_dn) / mid.replace(0, np.nan)
+        out["bb_pos_20"] = (adj - bb_dn) / (bb_up - bb_dn).replace(0, np.nan)
+
+        out = out.replace([np.inf, -np.inf], np.nan)
+        results.append(out)
+
+    return pd.concat(results, ignore_index=True)
+
+
 if __name__ == "__main__":
-    symbols = ["AAPL", "MSFT", "NVDA"]
-    market_symbol = "^GSPC"
-
-    df = download_yahoo(symbols, start="2016-01-01")
-    mkt = download_yahoo(market_symbol, start="2016-01-01")
-
-    feats = make_rolling_features(df, market=mkt)
-
-  
-    import os
-
-    out_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    os.makedirs(out_dir, exist_ok=True)
-
-    for t in feats.columns.get_level_values("ticker").unique():
-        
-        df_t = feats[t].copy()
-
-        
-        df_t = df_t.reset_index().rename(columns={"index": "date"})
-
-        out_path = os.path.join(out_dir, f"{t}_rolling.csv")
-        df_t.to_csv(out_path, index=False)
-
-        print(f"Saved {t} rolling features to {out_path}")
-
-    X, y, feature_names, meta = make_windows(
-        features=feats,
-        adj_close=df,  
-        window_len=64,
-        horizon=1,
-        target="next_return",
+    parser = argparse.ArgumentParser(
+        description="Build rolling features from sp500_simple.csv and merge with base rows."
     )
+    parser.add_argument(
+        "--input",
+        default=str(Path(__file__).resolve().parent.parent / "data" / "sp500_simple.csv"),
+        help="Path to sp500_simple.csv",
+    )
+    parser.add_argument("--start-date", default="2020-01-01")
+    parser.add_argument("--end-date", default="2025-12-31")
+    parser.add_argument(
+        "--rolling-output",
+        default=str(Path(__file__).resolve().parent.parent / "data" / "sp500_rolling_features_2020_2025.csv"),
+        help="Path to write rolling features",
+    )
+    parser.add_argument(
+        "--merged-output",
+        default=str(Path(__file__).resolve().parent.parent / "data" / "sp500_simple_with_rolling_2020_2025.csv"),
+        help="Path to write merged dataset",
+    )
+    args = parser.parse_args()
 
-    print("Tickers:", symbols)
-    print("Features per day:", len(feature_names))
-    print("X shape:", X.shape, "y shape:", y.shape)
-    if len(meta):
-        print("First sample:", meta.iloc[0].to_dict())
-        print("Last sample:", meta.iloc[-1].to_dict())
+    base = pd.read_csv(args.input, parse_dates=["date"])
+    base = base[(base["date"] >= pd.Timestamp(args.start_date)) & (base["date"] <= pd.Timestamp(args.end_date))]
+    base = base.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+    rolling = make_rolling_features_from_long(base)
+    merged = base.merge(rolling, on=["date", "ticker"], how="left")
+
+    rolling_out = Path(args.rolling_output)
+    merged_out = Path(args.merged_output)
+    rolling_out.parent.mkdir(parents=True, exist_ok=True)
+    merged_out.parent.mkdir(parents=True, exist_ok=True)
+
+    rolling.to_csv(rolling_out, index=False)
+    merged.to_csv(merged_out, index=False)
+
+    print(f"Input rows (filtered): {len(base):,}")
+    print(f"Rolling rows: {len(rolling):,}")
+    print(f"Merged rows: {len(merged):,}")
+    print(f"Saved rolling features: {rolling_out.resolve()}")
+    print(f"Saved merged dataset: {merged_out.resolve()}")
