@@ -45,3 +45,7 @@ So even though we have established four different baselines, the Always Up one w
 Even though accuracy on the validation set during cross-validation peaked at ~56%, when we selected our best-performing decision tree, we were only able to reach the accuracy of .5170 with the baseline of .5223.
 
 Unfortunately, this did not succeed.
+
+### Feature importances
+
+Still under development
