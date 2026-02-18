@@ -49,3 +49,7 @@ Unfortunately, this did not succeed.
 ### Feature importances
 
 Still under development
+
+## Logistic Regressor
+
+Same with Logistic regressor. Peak validation accuracy during training was 0.5267, but on the test set we were only able to reach 0.5182, which is still below the Always Up baseline of 0.5223.
