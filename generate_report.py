@@ -4,9 +4,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from pathlib import Path
 import copy
+import pandas as pd
 
-OUTPUT_PATH = "/Users/alexanisimov/Documents/Projects/predicting-short-term-stock-movements/draft_report.docx"
+OUTPUT_PATH = "draft_report.docx"
 
 doc = Document()
 
@@ -182,7 +184,7 @@ add_body(
 # ── Subsection: Dataset ───────────────────────────────────────────────────
 doc.add_heading('Dataset', level=2)
 
-add_body("Our dataset was assembled from five sources:")
+add_body("Our dataset was assembled from six sources:")
 
 dataset_sources = [
     (
@@ -192,6 +194,13 @@ dataset_sources = [
         "yielding approximately 1.26 million stock-day rows across 503 tickers. Note: we "
         "intentionally use the current constituent list for all historical dates, introducing "
         "survivorship bias."
+    ),
+    (
+        "Stock rolling / window-based features (JP)",
+        " \u2014 technical factors derived from historical OHLCV data, including multi-horizon "
+        "returns and momentum, rolling volatility and mean returns, ATR/range statistics, "
+        "volume shock measures, RSI, MACD, Bollinger Bands, and 60-day rolling beta/correlation "
+        "versus the S\u0026P 500."
     ),
     (
         "Company metadata and index level (Umesh)",
@@ -231,8 +240,8 @@ doc.add_paragraph()
 
 add_body(
     "The final merged dataset contains 43 columns. Missingness is substantial for several "
-    "data streams: NYSE prices (\u223885\u0025 missing), market regime features (\u223884\u0025 "
-    "missing), and news sentiment (\u223894\u0025 missing). Missing values for modelling are "
+    "data streams: NYSE prices (~85\u0025 missing), market regime features (~84\u0025 "
+    "missing), and news sentiment (~94\u0025 missing). Missing values for modelling are "
     "handled via median imputation (VIX, Yield Spread, Regime) and zero-fill (sentiment, "
     "revenue growth), so all rows are retained after feature engineering."
 )
@@ -286,8 +295,8 @@ add_body(
 )
 
 for item in [
-    "Train: \u223884% of rows (68.3\u0025), spanning 2016 through end of 2022 (~839,000 rows).",
-    "Test: \u223831.7\u0025 of rows, spanning 2023 through early 2026 (~389,000 rows).",
+    "Train: 830,418 rows (68.3\u0025), spanning 2016 through end of 2022.",
+    "Test: 389,066 rows (31.7\u0025), spanning 2023 through early 2026.",
 ]:
     add_bullet(item)
 
@@ -333,7 +342,7 @@ add_body(
 doc.add_heading('Models', level=2)
 
 add_body(
-    "We trained and evaluated two classification models, both using the identical 18 features "
+    "We trained and evaluated five classification models, all using the identical 18 features "
     "and the same time-split:"
 )
 
@@ -360,6 +369,39 @@ p_lr.add_run(
     "100 candidate C values (L2 penalty)."
 ).font.size = Pt(12)
 
+p_rf = doc.add_paragraph(style='Normal')
+p_rf.paragraph_format.left_indent = Inches(0.25)
+p_rf.paragraph_format.space_after = Pt(4)
+r3 = p_rf.add_run("Random Forest")
+r3.bold = True
+r3.font.size = Pt(12)
+p_rf.add_run(
+    " \u2014 300 trees with max_depth=8, min_samples_leaf=200, and max_features='sqrt' "
+    "to reduce overfitting on the large panel dataset."
+).font.size = Pt(12)
+
+p_xgb = doc.add_paragraph(style='Normal')
+p_xgb.paragraph_format.left_indent = Inches(0.25)
+p_xgb.paragraph_format.space_after = Pt(4)
+r4 = p_xgb.add_run("XGBoost")
+r4.bold = True
+r4.font.size = Pt(12)
+p_xgb.add_run(
+    " \u2014 gradient-boosted trees with regularisation (subsample/colsample, L1/L2, "
+    "min_child_weight) trained on the same features and split."
+).font.size = Pt(12)
+
+p_hgb = doc.add_paragraph(style='Normal')
+p_hgb.paragraph_format.left_indent = Inches(0.25)
+p_hgb.paragraph_format.space_after = Pt(4)
+r5 = p_hgb.add_run("HistGradientBoosting")
+r5.bold = True
+r5.font.size = Pt(12)
+p_hgb.add_run(
+    " \u2014 histogram-based gradient boosting (learning_rate=0.05, max_iter=300, "
+    "max_depth=8, min_samples_leaf=200) as an additional non-linear baseline."
+).font.size = Pt(12)
+
 # ════════════════════════════════════════════════════════════════════════════
 # SECTION 3 — RESULTS AND DISCUSSION
 # ════════════════════════════════════════════════════════════════════════════
@@ -380,7 +422,7 @@ make_table(
     headers=["Baseline Strategy", "Test Accuracy"],
     rows=[
         ["Random Guess",    "0.5003"],
-        ["Always Up",       "0.5223 (best)"],
+        ["Always Up",       "0.5224 (best)"],
         ["Follow Yesterday","0.4961"],
         ["Follow Market",   "0.4881"],
     ],
@@ -389,7 +431,7 @@ make_table(
 
 add_body(
     'The "Always Up" baseline is the strongest, reflecting a slight positive skew in the test '
-    "period (52.23\u0025 of days are up days). Notably, both \u201cFollow Yesterday\u201d and "
+    "period (52.24\u0025 of days are up days). Notably, both \u201cFollow Yesterday\u201d and "
     "\u201cFollow Market\u201d perform below random chance on this test set, suggesting that "
     "short-term momentum is contrarian rather than persistent over 2023\u20132026."
 )
@@ -402,27 +444,95 @@ p_cap2.paragraph_format.space_after = Pt(4)
 r = p_cap2.add_run("Table 2: ")
 r.bold = True
 r.font.size = Pt(12)
-p_cap2.add_run("Model Performance vs. Best Baseline").font.size = Pt(12)
+p_cap2.add_run("Model Performance vs. Best Baseline (same features and split)").font.size = Pt(12)
 
 make_table(
-    headers=["Model", "CV Val. Accuracy", "Test Accuracy", "\u0394 vs. Baseline"],
+    headers=["Model", "Test Accuracy", "Balanced Accuracy", "\u0394 vs. Baseline"],
     rows=[
-        ["Decision Tree (depth 19)", "~0.5600", "0.5170", "\u22120.0053"],
-        ["Logistic Regression",      "~0.5267", "0.5182", "\u22120.0041"],
+        ["Logistic Regression",      "0.5182", "0.5000", "\u22120.0042"],
+        ["HistGradientBoosting",     "0.5180", "0.5010", "\u22120.0044"],
+        ["Random Forest",            "0.5176", "0.4992", "\u22120.0048"],
+        ["XGBoost",                  "0.5173", "0.5006", "\u22120.0051"],
+        ["Decision Tree (depth 19)", "0.5170", "0.4991", "\u22120.0054"],
     ],
-    col_widths=[2.4, 1.5, 1.4, 1.3],
+    col_widths=[2.5, 1.4, 1.6, 1.3],
 )
 
 add_body(
-    'Neither model beat the "Always Up" baseline on the held-out test set. Both models exhibit '
-    "a similar failure mode: they overwhelmingly predict \u201cUp\u201d (recall \u2248\u00a00.90 "
-    "for class\u00a01, \u2248\u00a00.10 for class\u00a00), which collapses to the behaviour of "
-    "the \u201cAlways Up\u201d baseline while achieving lower accuracy."
+    'None of the five models beat the "Always Up" baseline on the held-out test set. '
+    "Logistic Regression has the best raw accuracy (0.5182), while HistGradientBoosting has "
+    "the best balanced accuracy (0.5010)."
 )
+
+add_body(
+    "All models exhibit a similar failure mode: they strongly favour \u201cUp\u201d predictions. "
+    "Down-class recall remains low (roughly 0.09\u20130.13), while Up-class recall remains high "
+    "(roughly 0.87\u20130.91), keeping overall behaviour close to the Always-Up baseline."
+)
+
+# ── Per-Sector Results ───────────────────────────────────────────────────
+doc.add_heading('Per-Sector Results', level=2)
+
+sector_best_path = Path(__file__).resolve().parent / "data" / "model_best_by_sector.csv"
+sector_model_path = Path(__file__).resolve().parent / "data" / "model_sector_results.csv"
+
+if sector_best_path.exists() and sector_model_path.exists():
+    sector_best = pd.read_csv(sector_best_path)
+    sector_model = pd.read_csv(sector_model_path)
+
+    sector_best = sector_best.sort_values("Sector").reset_index(drop=True)
+    n_sectors = len(sector_best)
+    n_positive = int((sector_best["Delta_vs_Sector_Baseline"] > 0).sum())
+
+    mean_delta = (
+        sector_model
+        .groupby("Model")["Delta_vs_Sector_Baseline"]
+        .mean()
+        .sort_values(ascending=False)
+    )
+    best_mean_model = mean_delta.index[0]
+    best_mean_delta = float(mean_delta.iloc[0])
+
+    add_body(
+        f"To test whether signal quality differs across industries, we evaluated model performance "
+        f"separately by sector. Across {n_sectors} sectors, the best-performing model in each "
+        f"sector beat that sector\u2019s own Always-Up baseline in {n_positive} sectors. "
+        f"However, average \u0394 vs sector baseline remains negative overall "
+        f"(best mean model: {best_mean_model}, \u0394={best_mean_delta:+.4f})."
+    )
+
+    p_cap3 = doc.add_paragraph(style='Normal')
+    p_cap3.paragraph_format.space_after = Pt(4)
+    r = p_cap3.add_run("Table 3: ")
+    r.bold = True
+    r.font.size = Pt(12)
+    p_cap3.add_run("Best Model by Sector (Test Set)").font.size = Pt(12)
+
+    sector_rows = []
+    for _, row in sector_best.iterrows():
+        sector_rows.append([
+            str(row["Sector"]),
+            str(row["Model"]),
+            f"{int(row['N']):,}",
+            f"{row['Accuracy']:.4f}",
+            f"{row['Sector_Baseline']:.4f}",
+            f"{row['Delta_vs_Sector_Baseline']:+.4f}",
+        ])
+
+    make_table(
+        headers=["Sector", "Best Model", "N", "Accuracy", "Sector Baseline", "\u0394 vs Baseline"],
+        rows=sector_rows,
+        col_widths=[1.4, 1.6, 0.9, 1.1, 1.2, 1.1],
+    )
+else:
+    add_body(
+        "Per-sector result files were not found in data/model_best_by_sector.csv and "
+        "data/model_sector_results.csv, so sector-level tables are omitted in this draft."
+    )
 
 add_body(
     "The gap between CV validation accuracy and test accuracy is notable for the decision tree "
-    "(\u223856\u0025 vs\u00a051.7\u0025), suggesting overfitting to patterns in the 2016\u20132022 "
+    "(~56\u0025 vs 51.7\u0025), suggesting overfitting to patterns in the 2016\u20132022 "
     "training regime that do not persist in 2023\u20132026."
 )
 
@@ -441,7 +551,7 @@ discussion_items = [
     ),
     (
         "Sparse sentiment signal.",
-        " News data covers only \u22366\u0025 of (ticker,\u00a0date) pairs. The has_news flag "
+        " News data covers only ~6\u0025 of (ticker,\u00a0date) pairs. The has_news flag "
         "and sentiment features are zero for the vast majority of rows, diluting any signal "
         "they carry."
     ),
@@ -459,9 +569,8 @@ discussion_items = [
     ),
     (
         "Class imbalance.",
-        " Both models learn to predict \u201cUp\u201d almost exclusively. Class weights or a "
-        "different decision threshold could improve recall for \u201cDown\u201d days, but this "
-        "was not explored in the current models."
+        " All five models learn to predict \u201cUp\u201d most of the time. Class weights, "
+        "asymmetric losses, or a tuned decision threshold could improve recall for \u201cDown\u201d days."
     ),
 ]
 
@@ -482,12 +591,13 @@ for i, (bold_part, rest) in enumerate(discussion_items, 1):
 doc.add_heading('Conclusion', level=1)
 
 add_body(
-    "We trained and evaluated two classification models \u2014 a decision tree and a logistic "
-    "regression \u2014 to predict next-day stock direction for S\u0026P\u00a0500 constituents "
+    "We trained and evaluated five classification models \u2014 Decision Tree, Logistic Regression, "
+    "Random Forest, XGBoost, and HistGradientBoosting \u2014 to predict next-day stock direction "
+    "for S\u0026P\u00a0500 constituents "
     "using 18 features derived from price, volume, macroeconomic indicators, and news sentiment. "
-    'Neither model outperformed the trivial "Always Up" baseline (52.23\u0025 accuracy) on the '
-    "2023\u20132026 test set, with the decision tree reaching 51.7\u0025 and logistic regression "
-    "51.8\u0025."
+    'None of the models outperformed the trivial "Always Up" baseline (52.24\u0025 accuracy) on '
+    "the 2023\u20132026 test set. The highest test accuracy was 51.82\u0025 (Logistic Regression), "
+    "and the highest balanced accuracy was 50.10\u0025 (HistGradientBoosting)."
 )
 
 add_body(
@@ -497,11 +607,18 @@ add_body(
 )
 
 add_body(
-    "Future work could include: (1)\u00a0applying tree ensemble methods (Random Forest, XGBoost) "
-    "which can model non-linear feature interactions more robustly; (2)\u00a0enriching news "
-    "coverage beyond the 2016\u20132020 Kaggle dataset to provide sentiment signals in the test "
-    "period; (3)\u00a0addressing class imbalance explicitly; and (4)\u00a0narrowing the prediction "
-    "task to specific sectors or market regimes where the signal-to-noise ratio may be higher."
+    "Sector-level analysis shows modest heterogeneity: a few sectors (e.g., Utilities, Energy, "
+    "Consumer Cyclical, Consumer Defensive) show small positive gains versus their own sector "
+    "baseline, but the average sector-level improvement remains negative across models."
+)
+
+add_body(
+    "Future work could include: (1)\u00a0tuning decision thresholds and calibrating probabilities "
+    "to improve minority-class recall; (2)\u00a0using class-weighted or asymmetric-loss objectives; "
+    "(3)\u00a0enriching news coverage beyond the 2016\u20132020 Kaggle dataset to provide sentiment "
+    "signals throughout the test period; (4)\u00a0walk-forward retraining to reduce regime drift; "
+    "and (5)\u00a0narrowing the prediction task to specific sectors, regimes, or larger-move targets "
+    "with potentially higher signal-to-noise."
 )
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -563,8 +680,8 @@ rs3.bold = True
 rs3.font.size = Pt(12)
 
 add_checklist_item("Four baselines defined and reported.", checked=True)
-add_checklist_item("Primary metric is accuracy (appropriate for near-balanced binary classification).", checked=True)
-add_checklist_item("Classification reports inspected; both models collapse to near-Always-Up behaviour.", checked=True)
+add_checklist_item("Primary metrics are accuracy and balanced accuracy.", checked=True)
+add_checklist_item("Classification reports inspected; all five models remain near-Always-Up behaviour.", checked=True)
 
 # -- Reproducibility
 p_sub4 = doc.add_paragraph(style='Normal')
