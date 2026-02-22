@@ -1,0 +1,217 @@
+{
+  "generated_utc": "2026-02-22T04:07:36.635971+00:00",
+  "sources": {
+    "merged_dataset": "data/merged_dataset.csv",
+    "overall_results": "data/model_overall_results.csv",
+    "sector_results": "data/model_sector_results.csv",
+    "best_sector_results": "data/model_best_by_sector.csv"
+  },
+  "raw_dataset": {
+    "rows": 1264542,
+    "date_min": "2016-02-10",
+    "date_max": "2026-02-09",
+    "tickers": 503,
+    "sectors": 12,
+    "rows_by_sector": {
+      "Technology": 191064,
+      "Industrials": 173466,
+      "Financial Services": 158382,
+      "Healthcare": 150840,
+      "Consumer Cyclical": 125700,
+      "Consumer Defensive": 87990,
+      "Utilities": 80448,
+      "Real Estate": 77934,
+      "Unknown": 67878,
+      "Energy": 52794,
+      "Communication Services": 50280,
+      "Basic Materials": 47766
+    }
+  },
+  "modeling_dataset": {
+    "rows_after_dropna": 1219484,
+    "train_rows": 830418,
+    "test_rows": 389066,
+    "always_up_baseline_test": 0.5223843769437576,
+    "overall_up_rate": 0.5245513676276196,
+    "train_up_rate": 0.5255666423415677,
+    "test_up_rate": 0.5223843769437576,
+    "test_rows_by_sector": {
+      "Technology": 59128,
+      "Industrials": 53474,
+      "Financial Services": 49014,
+      "Healthcare": 46345,
+      "Consumer Cyclical": 38900,
+      "Consumer Defensive": 27127,
+      "Utilities": 24568,
+      "Real Estate": 24118,
+      "Unknown": 19712,
+      "Energy": 16338,
+      "Communication Services": 15560,
+      "Basic Materials": 14782
+    }
+  },
+  "news_coverage": {
+    "raw_rows_has_news": 0.06276659849969396,
+    "model_rows_has_news": 0.06356786968914721,
+    "train_rows_has_news": 0.09335057766088885,
+    "test_rows_has_news": 0.0
+  },
+  "overall_model_results": [
+    {
+      "model": "Logistic Regression",
+      "accuracy": 0.5181717240776629,
+      "balanced_accuracy": 0.5000448100506393
+    },
+    {
+      "model": "HistGradientBoosting",
+      "accuracy": 0.518017508597513,
+      "balanced_accuracy": 0.5009722444274741
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": 0.5176165483491233,
+      "balanced_accuracy": 0.4991896661005927
+    },
+    {
+      "model": "XGBoost",
+      "accuracy": 0.5173389604848535,
+      "balanced_accuracy": 0.5005803488468543
+    },
+    {
+      "model": "Decision Tree",
+      "accuracy": 0.5170176782345411,
+      "balanced_accuracy": 0.4990617399714956
+    }
+  ],
+  "mean_sector_delta_by_model": {
+    "Random Forest": -0.004161047355263442,
+    "Logistic Regression": -0.004297491847619774,
+    "HistGradientBoosting": -0.004452103862862316,
+    "Decision Tree": -0.004901453965943116,
+    "XGBoost": -0.005219668597794641
+  },
+  "best_sector_delta_sorted": [
+    {
+      "sector": "Utilities",
+      "model": "Logistic Regression",
+      "accuracy": 0.5321556496255292,
+      "sector_baseline": 0.5293471182025399,
+      "delta_vs_sector_baseline": 0.0028085314229893,
+      "n": 24568
+    },
+    {
+      "sector": "Consumer Defensive",
+      "model": "HistGradientBoosting",
+      "accuracy": 0.5076123419471376,
+      "sector_baseline": 0.5052162052567553,
+      "delta_vs_sector_baseline": 0.0023961366903823,
+      "n": 27127
+    },
+    {
+      "sector": "Consumer Cyclical",
+      "model": "HistGradientBoosting",
+      "accuracy": 0.516426735218509,
+      "sector_baseline": 0.5147300771208226,
+      "delta_vs_sector_baseline": 0.0016966580976863,
+      "n": 38900
+    },
+    {
+      "sector": "Energy",
+      "model": "Random Forest",
+      "accuracy": 0.5269310809156568,
+      "sector_baseline": 0.5262578038927653,
+      "delta_vs_sector_baseline": 0.0006732770228914,
+      "n": 16338
+    },
+    {
+      "sector": "Real Estate",
+      "model": "Logistic Regression",
+      "accuracy": 0.513682726594245,
+      "sector_baseline": 0.5134339497470769,
+      "delta_vs_sector_baseline": 0.000248776847168,
+      "n": 24118
+    },
+    {
+      "sector": "Healthcare",
+      "model": "HistGradientBoosting",
+      "accuracy": 0.5113388715071745,
+      "sector_baseline": 0.5112957169058151,
+      "delta_vs_sector_baseline": 4.3154601359396416e-05,
+      "n": 46345
+    },
+    {
+      "sector": "Industrials",
+      "model": "Logistic Regression",
+      "accuracy": 0.5213748737704305,
+      "sector_baseline": 0.5248531996858287,
+      "delta_vs_sector_baseline": -0.0034783259153982,
+      "n": 53474
+    },
+    {
+      "sector": "Basic Materials",
+      "model": "Random Forest",
+      "accuracy": 0.5144094168583412,
+      "sector_baseline": 0.5181301583006359,
+      "delta_vs_sector_baseline": -0.0037207414422947,
+      "n": 14782
+    },
+    {
+      "sector": "Communication Services",
+      "model": "Decision Tree",
+      "accuracy": 0.5195372750642674,
+      "sector_baseline": 0.5238431876606684,
+      "delta_vs_sector_baseline": -0.004305912596401,
+      "n": 15560
+    },
+    {
+      "sector": "Financial Services",
+      "model": "HistGradientBoosting",
+      "accuracy": 0.5302362590280328,
+      "sector_baseline": 0.535316440200759,
+      "delta_vs_sector_baseline": -0.0050801811727261,
+      "n": 49014
+    },
+    {
+      "sector": "Technology",
+      "model": "Logistic Regression",
+      "accuracy": 0.5209545393045596,
+      "sector_baseline": 0.5280070355838181,
+      "delta_vs_sector_baseline": -0.0070524962792585,
+      "n": 59128
+    },
+    {
+      "sector": "Unknown",
+      "model": "Random Forest",
+      "accuracy": 0.5231331168831169,
+      "sector_baseline": 0.5325689935064936,
+      "delta_vs_sector_baseline": -0.0094358766233766,
+      "n": 19712
+    }
+  ],
+  "positive_sector_deltas": {
+    "count": 6,
+    "total_sectors": 12
+  },
+  "mean_recall_by_model": {
+    "Decision Tree": {
+      "down_recall": 0.0965544507250426,
+      "up_recall": 0.9024861514724107
+    },
+    "HistGradientBoosting": {
+      "down_recall": 0.12339270404373166,
+      "up_recall": 0.8789272812061367
+    },
+    "Logistic Regression": {
+      "down_recall": 0.10144215104279508,
+      "up_recall": 0.898804968152528
+    },
+    "Random Forest": {
+      "down_recall": 0.08769475366563662,
+      "up_recall": 0.9118901619016486
+    },
+    "XGBoost": {
+      "down_recall": 0.13038063326843277,
+      "up_recall": 0.871021286572879
+    }
+  }
+}
